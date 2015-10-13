@@ -1,0 +1,103 @@
+---
+title: "Practical Machine Learning Project"
+author: "Chung Cher Tee"
+date: "Monday, October 5, 2015"
+output: html_document
+---
+
+##Introduction and Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+In this project, we will be using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who are asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website by clicking [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+The objective of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set
+
+
+```{r, warning=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+```
+
+## Read data
+You have to ensure that the files are stored in the working directory. 
+
+```{r}
+trainRaw <- read.csv("./data/pml-training.csv")
+testRaw <- read.csv("./data/pml-testing.csv")
+dim(trainRaw)
+dim(testRaw)
+```
+Use the following to get an idea of the variables
+head(trainRaw)
+tail(trainRaw)
+
+
+## Clean Data
+The head() function and tail() function helps to give an idea of the variables
+All missing values and unneccesary variables has to be removed. This is to ensure a clean data for  analysis. 
+
+```{r}
+sum(complete.cases(trainRaw))
+trainRaw <- trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testRaw <- testRaw[, colSums(is.na(testRaw)) == 0] 
+classe <- trainRaw$classe
+trainRemove <- grepl("^X|timestamp|window", names(trainRaw))
+trainRaw <- trainRaw[, !trainRemove]
+trainCleaned <- trainRaw[, sapply(trainRaw, is.numeric)]
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(testRaw))
+testRaw <- testRaw[, !testRemove]
+testCleaned <- testRaw[, sapply(testRaw, is.numeric)]
+```
+
+## Segregate the data set.
+Make sure you set seed so that the training and test results are reproducible
+
+```{r}
+set.seed(8800) 
+inTrain <- createDataPartition(trainCleaned$classe, p=0.70, list=F)
+trainData <- trainCleaned[inTrain, ]
+testData <- trainCleaned[-inTrain, ]
+```
+
+## Data Modeling using Random Forest
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+
+predictRf <- predict(modelRf, testData)
+confusionMatrix(testData$classe, predictRf)
+
+accuracy <- postResample(predictRf, testData$classe)
+accuracy
+
+outofsampleerror <- 1 - as.numeric(confusionMatrix(testData$classe, predictRf)$overall[1])
+outofsampleerror
+```
+
+From this results for the training data, we have manage to obtain `r accuracy[1]` and out of sample error of `r outofsampleerror`
+
+##Predicting for Test Data Set
+```{r}
+result <- predict(modelRf, testCleaned[, -length(names(testCleaned))])
+result
+```
+
+## Appendix
+
+### 1. Tree Visualization
+```{r, echo=FALSE}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel) 
+```
+
+### 2. Correlation Matrix
+```{r, echo=FALSE}
+corrPlot <- cor(trainData[, -length(names(trainData))])
+corrplot(corrPlot, method="color")
+```
+
+
